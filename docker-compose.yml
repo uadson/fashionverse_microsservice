@@ -1,0 +1,115 @@
+services:
+  # -- database --
+  db_products:
+    image: postgres:15-alpine
+    container_name: db_fashion_products
+    volumes:
+      - pgdata_products:/var/lib/postgresql/data
+    enviroment:
+      POSTGRES_DB: db_fashion_products
+      POSTGRES_USER: user_prod
+      POSTGRES_PASSWORD: pass_prod
+    networks:
+      - fashion_network
+    restart: unless-stopped
+
+  db_users:
+    image: postgres:15-alpine
+    container_name: db_fashion_users
+    volumes:
+      - pgdata_users:/var/lib/postgresql/data
+    enviroment:
+      POSTGRES_DB: db_fashion_users
+      POSTGRES_USER: user_users
+      POSTGRES_PASSWORD: pass_users
+    networks:
+      - fashion_network
+    restart: unless-stopped
+
+  db_orders:
+    image: postgres:15-alpine
+    container_name: db_fashion_orders
+    volumes:
+      - pgdata_orders:/var/lib/postgresql/data
+    enviroment:
+      POSTGRES_DB: db_fashion_orders
+      POSTGRES_USER: user_orders
+      POSTGRES_PASSWORD: pass_orders
+    networks:
+      - fashion_network
+    restart: unless-stopped
+
+  # -- Backend services --
+  service_products:
+    container_name: service_products
+    build: ./service_products
+    env_file:
+      - ./service_products/.env
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./service_products/src:/app/app
+    depends_on:
+      - db_products
+    networks:
+      - fashion_network
+    restart: unless-stopped
+
+  service_users:
+    container_name: service_users
+    build: ./service_users
+    env_file:
+      - ./service_users/.env
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./service_users/src:/app
+    command: >
+      sh -c "python manage.py migrate && 
+             gunicorn --bind 0.0.0.0:8000 service_users.wsgi:application"
+    depends_on:
+      - db_users
+    networks:
+      - fashion_network
+    restart: unless-stopped
+
+  service_orders:
+    container_name: service_orders
+    build: ./service_orders
+    env_file:
+      - ./service_orders/.env
+    ports:
+      - "8003:8000"
+    volumes:
+      - ./service_orders/src:/app
+    command: >
+      sh -c "python manage.py migrate && 
+             gunicorn --bind 0.0.0.0:8000 service_orders.wsgi:application"
+    depends_on:
+      - db_orders
+    networks:
+      - fashion_network
+    restart: unless-stopped
+
+  frontend_vue:
+    container_name: frontend_vue
+    build: ./frontend_vue
+    ports:
+      - "8080:80"
+    depends_on:
+      - service_products
+      - service_users
+      - service_orders
+    networks:
+      - fashion_network
+    restart: unless-stopped
+
+volumes:
+  pgdata_products:
+  pgdata_users:
+  pgdata_orders:
+
+
+networks:
+  fashion_network:
+    driver: bridge
